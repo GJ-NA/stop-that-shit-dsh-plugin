@@ -1,0 +1,37 @@
+{
+  "name": "dsh-stop-that-shit",
+  "version": "0.2.5",
+  "private": true,
+  "description": "Stop That Shit（别再造史了）的 DeepSeek Harness 本地化插件：把上游 0.2.5 的 DSH Guard 桥接与两套 Skill 装进当前 dsh，规则与提示词已本地化为中文。",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "stop-that-shit",
+    "guard",
+    "skill"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "main": "lib/index.cjs",
+  "files": [
+    "lib",
+    "src",
+    "skills",
+    "cordis.patch.yml",
+    "README.md",
+    "LOCALIZATION.md"
+  ],
+  "scripts": {
+    "test": "node --test tests/bridge.test.cjs",
+    "localize:check": "node tools/localize.cjs --check"
+  },
+  "engines": {
+    "dsh": ">=0.2.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

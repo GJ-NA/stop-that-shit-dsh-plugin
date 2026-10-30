@@ -1,0 +1,17 @@
+# ============================================================================
+# dsh-stop-that-shit —— DSH bundle patch
+# ============================================================================
+# 只有一行：把 `sts-bridge` 挂到当前 profile 的事件面上。
+#
+# 安装（本地源码目录，link 进 web profile）：
+#   dsh plugin --profile web add "link:/home/lvguadmin/DSH workspace/Test/dsh-stop-that-shit"
+# 装完后 `name:` 必须与**包名**一致（dsh-stop-that-shit），否则不生效。
+#
+# config.dataDir 留空 = 使用默认值 ~/.dsh/stop-that-shit（会话契约与审计账本都落在这里）。
+# ============================================================================
+
+- insert:
+    - id: sts-bridge
+      name: dsh-stop-that-shit
+      config:
+        dataDir: ""
