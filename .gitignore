@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+
+# 运行数据（插件运行时写到 ~/.dsh/stop-that-shit，这里只是防误提交）
+*.jsonl
+sessions/
+runtime/
+
+# 本机与编辑器
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.local
+.agent-tmp/
+
+# 凭据
+*.pem
+*.key
+.env
+.env.*
