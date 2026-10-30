@@ -23,4 +23,5 @@
   `LOCALIZATION.md`：本适配版新增；
 - `src/` 与 `skills/` 中的中文文案：仅替换面向人和面向模型的字符串，见 `LOCALIZATION.md`。
 
-上游作者未参与本适配版，问题请提到本仓库。
+上游作者未参与本适配版，问题请提到本仓库：
+<https://github.com/GJ-NA/stop-that-shit-dsh-plugin>。

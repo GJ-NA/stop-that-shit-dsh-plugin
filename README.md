@@ -5,6 +5,7 @@ DSH Guard 桥接、两套 Skill 和整套判定运行时，适配到本机 `dsh`
 并把面向人和面向模型的消息、Skill 正文翻成中文。
 
 上游项目：<https://github.com/lennney/stop-that-shit> ｜ 版本 `0.2.5` ｜
+本仓库：<https://github.com/GJ-NA/stop-that-shit-dsh-plugin> ｜
 commit `17ffc9f` ｜ 许可证 MIT
 
 ## 它在你这里装了什么
