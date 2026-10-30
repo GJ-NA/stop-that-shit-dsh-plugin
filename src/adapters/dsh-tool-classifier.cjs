@@ -187,6 +187,51 @@ function runCodeBindingOnly() {
   return RUN_CODE_BINDING_ONLY;
 }
 
+// ---------------------------------------------------------------------------
+// Configurable tool-class allowlist.
+//
+// The sets above cover the tools DSH ships. Every plugin that registers its own
+// tools (`ig5_*`, `acp_*`, `purge_*`, …) lands in the name heuristic instead,
+// and a name heuristic cannot know what an unknown third-party tool does: a
+// mutating tool that merely reads as `unknown` would only ask for approval
+// rather than be refused outside a change contract.
+//
+// A deployment that knows its own toolset can therefore declare the class of a
+// tool explicitly. An override is consulted ONLY for names the adapter does not
+// already classify from an explicit builtin set: a contract author must not be
+// able to downgrade `write`, `bash`, the editor or `run_code` by configuration.
+// Unlisted names keep the previous behavior, so mounting without config changes
+// nothing.
+const TOOL_CLASS_VALUES = new Set(['read', 'write', 'control', 'delegate', 'unknown']);
+
+// Exact names and `prefix*` wildcards, normalized like every other lookup.
+const TOOL_CLASS_OVERRIDES = new Map();
+
+function setToolClassOverrides(entries) {
+  TOOL_CLASS_OVERRIDES.clear();
+  if (!entries || typeof entries !== 'object') return [];
+  const rejected = [];
+  for (const [rawName, rawClass] of Object.entries(entries)) {
+    const name = normalizeToolName(rawName);
+    const value = String(rawClass || '').trim().toLowerCase();
+    if (!name || !TOOL_CLASS_VALUES.has(value)) {
+      rejected.push(`${rawName}=${rawClass}`);
+      continue;
+    }
+    TOOL_CLASS_OVERRIDES.set(name, value);
+  }
+  return rejected;
+}
+
+function toolClassOverride(name) {
+  const exact = TOOL_CLASS_OVERRIDES.get(name);
+  if (exact !== undefined) return exact;
+  for (const [pattern, value] of TOOL_CLASS_OVERRIDES) {
+    if (pattern.endsWith('*') && name.startsWith(pattern.slice(0, -1))) return value;
+  }
+  return undefined;
+}
+
 const HASH_API = /\b(?:createHash|createHmac)\s*\(|\bcrypto\.subtle\.digest\s*\(|\bhashlib\.(?:md5|sha1|sha224|sha256|sha384|sha512|blake2[bs])\s*\(|\bMessageDigest\.getInstance\s*\(|\bDigestUtils\.[A-Za-z0-9_]+\s*\(|\bsha(?:1|256|512)\.(?:New|Sum\w*)\s*\(|\b(?:bcrypt|argon2)\.hash\s*\(|\bpassword_hash\s*\(|\bPasswordHasher\s*\(/i;
 
 function isWindowsAbsolute(value) {
@@ -279,6 +324,13 @@ function classifyDshTool(toolName, toolInput) {
   if (DSH_READ_TOOLS.has(name)) return 'read';
   if (DSH_CONTROL_TOOLS.has(name)) return 'control';
 
+  // Only names that reached the heuristic fallback consult the configured
+  // overrides. Every branch above is an explicit builtin classification, so a
+  // configuration cannot downgrade a write, a shell, the editor or `run_code`
+  // into something a contract would admit.
+  const override = toolClassOverride(name);
+  if (override !== undefined) return override;
+
   // MCP and plugin tools use names such as mcp__server__create_item. The
   // name-based fallback is host-neutral for these separator-delimited names.
   return classifyCodexTool(name, toolInput);
@@ -368,13 +420,21 @@ function analyzeDshTool(toolName, toolInput, cwd) {
       dependencyIntent: detectDependencyIntent(name, toolInput, cwd)
     };
   }
-  const pathMutability = isShellTool(name) ? analysis.mutability : undefined;
+  // A configured override produces a `write` the shared name heuristic would not
+  // reproduce, so pass the classification down for those names only. For every
+  // other name keep the previous `undefined` hand-off: without that, tools the
+  // heuristic misreads (control tools whose name contains a write verb, for one)
+  // would change their affected-path result while the allowlist stays empty.
+  const pathMutability =
+    toolClassOverride(name) !== undefined || isShellTool(name) ? analysis.mutability : undefined;
   return { ...analysis, affectedPaths: extractAffectedPaths(name, toolInput, cwd, pathMutability) };
 }
 
 module.exports = {
   DSH_CONTROL_TOOLS,
   setRunCodeBindingOnly,
+  setToolClassOverrides,
+  toolClassOverride,
   DSH_DELEGATE_TOOLS,
   DSH_READ_TOOLS,
   analyzeDshTool,

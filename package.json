@@ -27,7 +27,7 @@
     "localize:check": "node tools/localize.cjs --check"
   },
   "engines": {
-    "dsh": ">=0.2.0"
+    "dsh": ">=0.2.1-rc.5"
   },
   "dsh": {
     "bundle": {

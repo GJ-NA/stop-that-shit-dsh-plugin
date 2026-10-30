@@ -1,8 +1,8 @@
 # dsh-stop-that-shit
 
 Stop That Shit（别再造史了）的 **DeepSeek Harness 本地化插件**：把上游 0.2.5 的
-DSH Guard 桥接、两套 Skill 和整套判定运行时，适配到本机 `dsh`（web profile），
-并把面向人和面向模型的消息、Skill 正文翻成中文。
+DSH Guard 桥接、两套 Skill 和整套判定运行时适配进 `dsh`，并把面向人和面向模型的消息、
+Skill 正文翻成中文。已在 **DSH 0.2.1-rc.5 桌面端（`desktop` profile）** 实测运行。
 
 上游项目：<https://github.com/lennney/stop-that-shit> ｜ 版本 `0.2.5` ｜
 本仓库：<https://github.com/GJ-NA/stop-that-shit-dsh-plugin> ｜
@@ -32,20 +32,28 @@ commit `17ffc9f` ｜ 许可证 MIT
 3. **可停用开关**：patch 里加 `enabled:false` 就能临时停用，不必卸载或改代码。
 4. **本地化**：运行时 77 条消息 + 两套 Skill 正文翻成中文，见 [LOCALIZATION.md](LOCALIZATION.md)。
 
-事件契约按本机 **DSH 0.2.2-alpha.2** 逐个核对过（`dsh-agent`、`dsh-agent-loop`、
-`dsh-tools/lib/pipeline.js`、`dsh-session`、`dsh-subagent` 的类型声明与实现一致）：
+事件契约在两个宿主上逐个核对过：开发期是 **DSH 0.2.2-alpha.2（Web profile）**，
+另一次是 **DSH 0.2.1-rc.5（桌面端 `desktop` profile）**。两边的
+`dsh-agent`、`dsh-agent-loop`、`dsh-tools/lib/index.js`、`dsh-session`、`dsh-subagent`
+的类型声明与实现都一致，差异只在下表最后一列记的两处（均已按实测兼容）：
 
-| DSH 事件 | 适配层事件 | 模式 | 能否拦截 |
-| --- | --- | --- | --- |
-| `session/created` / `session/disposed` | `session.start` / `session.end` | emit | 否 |
-| `agent/pre-step` | `prompt.submit` | waterfall | 可拒绝本步 |
-| `tools/pre-execute` | `action.before` | waterfall | 可拒绝调用 |
-| `tools/post-execute` | `action.after` | waterfall | 仅观测 |
-| `subagent/start` / `subagent/end` | `subagent.start` / `subagent.stop` | emit | 否 |
+| DSH 事件 | 适配层事件 | 模式 | 能否拦截 | 桌面端注意 |
+| --- | --- | --- | --- | --- |
+| `session/created` / `session/disposed` | `session.start` / `session.end` | emit | 否 | 只收到一个 `session` 实参 |
+| `agent/pre-step` | `prompt.submit` | waterfall | 可拒绝本步 | 载荷里 `turn` 有、`step` 也有 |
+| `tools/pre-execute` | `action.before` | waterfall | 可拒绝调用 | — |
+| `tools/post-execute` | `action.after` | waterfall | 仅观测 | — |
+| `subagent/start` / `subagent/end` | `subagent.start` / `subagent.stop` | emit | 否 | 只收到扁平 `info`，父会话靠 header 反查 |
 
 `agent/pre-step` 的 `payload.agent` 由 harness 的 `agentEvents().fused()` 注入，
 `tools/pre-execute` 的签名是 `(exec, next)`，`subagent/start` 的 run info 是扁平的
 `{ runId, provider, id, local }` —— 这三点是桥接能否工作的关键，都已验证。
+
+`subagent/start|end` 的第二个实参是 cordis 的 scope carrier，不是监听器参数
+（`createLifecycleEmitter` 里 `callback(info)` 只传一个），所以父会话只能靠
+`session.header.parentSession` 反查。`subagent/end` 可能晚于子会话的
+`session/disposed`，那时 header 已经查不到 —— 本包为此在内存里缓存
+child→parent（LRU 512），查不到就在日志里警告并跳过，不再把账记到空会话上。
 
 ## 怎么用
 
@@ -75,22 +83,44 @@ $stop-that-shit change -- 修掉配置读取失败，补齐受影响的调用方
 ## 已装进哪个 profile
 
 ```bash
-# 本机已经执行过的安装（web profile，live 生效，无需重启）
-dsh plugin --profile web add "link:/home/lvguadmin/DSH workspace/Test/dsh-stop-that-shit"
+# 本机已经执行过的安装（桌面端 desktop profile，live 生效，无需重启）
+dsh plugin --profile desktop add "file:C:/Users/gjna/.dsh/plugins/dsh-stop-that-shit"
 ```
 
 装完 profile 的 `package.json` 里会同时出现：
 
 ```json
-"dependencies": { "dsh-stop-that-shit": "link:/home/lvguadmin/DSH workspace/Test/dsh-stop-that-shit" },
+"dependencies": { "dsh-stop-that-shit": "file:C:/Users/gjna/.dsh/plugins/dsh-stop-that-shit" },
 "dsh": { "profile": { "bundles": ["…", "dsh-stop-that-shit"] } }
 ```
+
+`web` profile 同样能装，把 `--profile desktop` 换成 `--profile web` 即可。
 
 换一台机器或换 profile：
 
 ```bash
-dsh plugin --profile <名字> add "link:<本目录绝对路径>"
+dsh plugin --profile <名字> add "file:<本目录绝对路径>"
 ```
+
+## 第三方工具的分类白名单
+
+适配层内置了 DSH 自带工具的分类。插件自己注册的工具（`ig5_*`、`acp_*`、`purge_*` ……）
+只能落到名字启发式，落到 `unknown` 后，在契约外只是「询问」而不是「拒绝」。
+知道自己工具集的部署可以在 patch 里补上：
+
+```yaml
+config:
+  toolClasses:
+    ig5_open: read
+    ig5_funcs: read
+    "ig5_*": read          # 前缀通配，末尾 * 匹配其余名字
+    purge_apply: write
+    acp_cache: read
+```
+
+值域是 `read` / `write` / `control` / `delegate` / `unknown`，非法项会被忽略并在日志里列出来。
+白名单只在**内置显式分类之后、名字启发式之前**查询，所以配置改不动
+`write`、`edit`、`bash`、`pwsh`、`run_code` 这些已经明确的分类 —— 防止把写操作配成只读。
 
 ## 验证
 
@@ -115,7 +145,7 @@ config:
 ```
 
 ```bash
-dsh plugin --profile web remove dsh-stop-that-shit   # 卸载
+dsh plugin --profile desktop remove dsh-stop-that-shit   # 卸载
 ```
 
 更新上游：把新版 `src/`、`skills/` 覆盖进来，跑一次 `node tools/localize.cjs`
@@ -136,5 +166,9 @@ dsh plugin --profile web remove dsh-stop-that-shit   # 卸载
   也删掉了 `codex-tool-classifier` 之外的其它 host 文件。
 - 守卫是**护栏不是沙箱**：宿主最终有没有执行动作，适配层记为 `hostEffect: unobserved`；
   真正的隔离靠 DSH 自己的 sandbox / permission。
+- 工具分类对第三方插件注册的工具只能靠名字启发式，未配置白名单时会落 `unknown`；
+  要让它按契约拒绝而不只是询问，得按上面「第三方工具的分类白名单」补声明。
+- `agent/pre-step` 不处理子会话（`header.parentSession` 存在时直接放行）：
+  委派出去的子代理不参与 prompt 级判定，工具级判定仍按其根会话契约生效。
 - 审计账本不存代码与对话正文，但会存路径与关联 ID；要分享前先自己看一眼。
 - `skills/stss/references/examples.md` 保留上游英文原样（它本身就是英文写作的成对案例）。
